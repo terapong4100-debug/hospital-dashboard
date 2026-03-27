@@ -572,13 +572,7 @@ table.dtbl td{padding:7px 11px;vertical-align:middle;}
       <div class="live-dot-g" id="liveDot"></div>
     </div>
     <div class="sb-status" id="sbStatus">กำลังโหลด...</div>
-    <div class="tick-wrap"><div class="tick-fill" id="tickF" style="width:0%"></div></div>
-    <div class="rb-group">
-      <button class="rb" onclick="setMs(5000,this)">5s</button>
-      <button class="rb on" onclick="setMs(10000,this)">10s</button>
-      <button class="rb" onclick="setMs(30000,this)">30s</button>
-      <button class="rb" onclick="setMs(60000,this)">1m</button>
-    </div>
+    <button class="rb on" style="width:100%;margin-top:8px;" onclick="fetchNow()">↻ รีเฟรชข้อมูล</button>
   </div>
 </nav>
 
@@ -735,6 +729,8 @@ table.dtbl td{padding:7px 11px;vertical-align:middle;}
         </div>
       </div>
 
+      <div id="monthDetail" style="margin-bottom:14px;"></div>
+
       <div class="panel">
         <div class="ph"><div class="pt">🌡️ Heatmap มูลค่าวัสดุ × 12 เดือน <span>(Top 20)</span></div></div>
         <div class="htbl-wrap"><table class="htbl"><thead id="heatHead"></thead><tbody id="heatBody"></tbody></table></div>
@@ -869,8 +865,7 @@ table.dtbl td{padding:7px 11px;vertical-align:middle;}
   แถวทั้งหมด: <span id="ftRows">—</span> &nbsp;·&nbsp;
   กรองแล้ว: <span id="ftFilt">—</span> &nbsp;·&nbsp;
   มูลค่า PO รวม: <span id="ftTotal">—</span> &nbsp;·&nbsp;
-  Live Refresh: <span id="ftInterval">10s</span> &nbsp;·&nbsp;
-  แหล่งข้อมูล: <span>Google Sheets CSV · Real-time</span>
+  แหล่งข้อมูล: <span>Google Sheets CSV</span>
 </div>
 
 <!-- ════════════════════════════════════════════
@@ -907,7 +902,6 @@ const QTR_M=[[0,1,2],[3,4,5],[6,7,8],[9,10,11]];
 const PAL=['#c8a84b','#38bdf8','#10c47e','#f0506e','#8b7cf8','#f59e0b','#0ea8a0','#e2c06a','#3b9eff','#28e07b'];
 
 let allRows=[],filtRows=[];
-let ms=10000,pollT=null,tickT=null,tickS=0;
 let charts={};
 let activeTab='overview';
 let sortC='',sortA=true;
@@ -1110,30 +1104,87 @@ function renderOverview(){
 function renderMonthly(){
   const mIdx=document.getElementById('selMonth')?.value;
   const metric=document.getElementById('selMetric')?.value||'total';
-  const mTotals=getMonthlyTotals(metric==='total'?'total':'qty');
-
-  // KPI
-  const peak=mTotals.indexOf(Math.max(...mTotals));
-  const low=mTotals.indexOf(Math.min(...mTotals.filter(v=>v>0)));
-  const avg=mTotals.reduce((a,b)=>a+b,0)/mTotals.filter(v=>v>0).length;
-  const total=mTotals.reduce((a,b)=>a+b,0);
-  document.getElementById('kpiMonthly').innerHTML=`
-    <div class="kcard" style="--kc:var(--gold)"><div class="kcard-label">รวมทั้งปี</div><div class="kcard-val sm">฿${fmtB(total)}</div></div>
-    <div class="kcard" style="--kc:var(--emerald)"><div class="kcard-label">เดือนสูงสุด</div><div class="kcard-val sm">${MONTHS[peak]}</div><div class="kcard-sub">฿${fmtB(mTotals[peak])}</div></div>
-    <div class="kcard" style="--kc:var(--rose)"><div class="kcard-label">เดือนต่ำสุด</div><div class="kcard-val sm">${MONTHS[low]}</div><div class="kcard-sub">฿${fmtB(mTotals[low])}</div></div>
-    <div class="kcard" style="--kc:var(--sky)"><div class="kcard-label">เฉลี่ย/เดือน</div><div class="kcard-val sm">฿${fmtB(avg)}</div></div>`;
-
-  // Combo chart
+  const isTotal=metric==='total';
+  const mTotals=getMonthlyTotals(isTotal?'total':'qty');
   const mTots=getMonthlyTotals('total');
   const mQtys=getMonthlyTotals('qty');
+
+  const nonZero=mTotals.filter(v=>v>0);
+  const peak=mTotals.indexOf(Math.max(...mTotals));
+  const low=nonZero.length?mTotals.indexOf(Math.min(...nonZero)):0;
+  const avg=nonZero.length?mTotals.reduce((a,b)=>a+b,0)/nonZero.length:0;
+  const total=mTotals.reduce((a,b)=>a+b,0);
+  const totalVal=mTots.reduce((a,b)=>a+b,0);
+  const totalQty=mQtys.reduce((a,b)=>a+b,0);
+
+  // KPI — always show year summary
+  document.getElementById('kpiMonthly').innerHTML=`
+    <div class="kcard" style="--kc:var(--gold)"><div class="kcard-icon">💰</div><div class="kcard-label">มูลค่ารวมทั้งปี</div><div class="kcard-val sm">฿${fmtB(totalVal)}</div><div class="kcard-sub">${fmtN(totalQty)} ชิ้น</div></div>
+    <div class="kcard" style="--kc:var(--emerald)"><div class="kcard-icon">📈</div><div class="kcard-label">เดือนสูงสุด</div><div class="kcard-val sm">${MONTHS[peak]}</div><div class="kcard-sub">${isTotal?'฿':''}${fmtB(mTotals[peak])}${isTotal?'':' ชิ้น'}</div></div>
+    <div class="kcard" style="--kc:var(--rose)"><div class="kcard-icon">📉</div><div class="kcard-label">เดือนต่ำสุด</div><div class="kcard-val sm">${nonZero.length?MONTHS[low]:'—'}</div><div class="kcard-sub">${nonZero.length?(isTotal?'฿':'')+fmtB(mTotals[low])+(isTotal?'':' ชิ้น'):'ไม่มีข้อมูล'}</div></div>
+    <div class="kcard" style="--kc:var(--sky)"><div class="kcard-icon">📊</div><div class="kcard-label">เฉลี่ย/เดือน</div><div class="kcard-val sm">${isTotal?'฿':''}${fmtB(avg)}${isTotal?'':' ชิ้น'}</div><div class="kcard-sub">${nonZero.length} เดือนที่มีข้อมูล</div></div>`;
+
+  // Combo chart — fixed 12-color highlighting
+  const peakI=mTots.indexOf(Math.max(...mTots));
+  const selI=mIdx!=='all'&&mIdx!==''?parseInt(mIdx):-1;
   mkChart('cMonthCombo','bar',{labels:MONTHS,datasets:[
-    {type:'bar',label:'มูลค่า (บาท)',data:mTots,backgroundColor:PAL.map((c,i)=>c+(i===Math.max(...mTots.map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v)[0].i)?'ff':'66')),borderRadius:4,yAxisID:'y'},
-    {type:'line',label:'จำนวน',data:mQtys,borderColor:'#38bdf8',backgroundColor:'transparent',borderWidth:2,pointRadius:4,tension:.4,yAxisID:'y1'}
+    {type:'bar',label:'มูลค่า (บาท)',data:mTots,
+      backgroundColor:MONTHS.map((_,i)=>selI>=0?(i===selI?'rgba(200,168,75,1)':'rgba(200,168,75,.25)'):(i===peakI?'rgba(200,168,75,1)':'rgba(200,168,75,.4)')),
+      borderColor:MONTHS.map((_,i)=>(selI>=0?i===selI:i===peakI)?'#c8a84b':'rgba(200,168,75,.4)'),
+      borderWidth:1,borderRadius:4,yAxisID:'y'},
+    {type:'line',label:'จำนวน (ชิ้น)',data:mQtys,borderColor:'#38bdf8',backgroundColor:'transparent',borderWidth:2,
+      pointRadius:MONTHS.map((_,i)=>selI>=0&&i===selI?7:3),
+      pointBackgroundColor:MONTHS.map((_,i)=>selI>=0&&i===selI?'#38bdf8':'rgba(56,189,248,.6)'),
+      tension:.4,yAxisID:'y1'}
   ]},{scales:{x:{ticks:{color:'#4a6888',font:{size:9}},grid:{color:'rgba(30,53,84,.4)'}},y:{ticks:{color:'#4a6888',font:{size:9},callback:v=>fmtB(v)},grid:{color:'rgba(30,53,84,.4)'},position:'left'},y1:{ticks:{color:'#4a6888',font:{size:9},callback:v=>fmtN(v)},grid:{display:false},position:'right'}},plugins:{legend:{labels:{color:'#4a6888',font:{size:10},boxWidth:9}}}});
 
   // MoM % change
   const mom=mTotals.map((v,i)=>i===0?0:mTotals[i-1]?+pct(v,mTotals[i-1]):0);
-  mkChart('cMoM','bar',{labels:MONTHS.slice(1),datasets:[{label:'%MoM',data:mom.slice(1),backgroundColor:mom.slice(1).map(v=>v>=0?'rgba(16,196,126,.6)':'rgba(240,80,110,.6)'),borderColor:mom.slice(1).map(v=>v>=0?'#10c47e':'#f0506e'),borderWidth:1,borderRadius:4}]},{plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#4a6888',font:{size:9}},grid:{color:'rgba(30,53,84,.4)'}},y:{ticks:{color:'#4a6888',font:{size:9},callback:v=>v+'%'},grid:{color:'rgba(30,53,84,.4)'}}}});
+  mkChart('cMoM','bar',{labels:MONTHS.slice(1),datasets:[{label:'%MoM',data:mom.slice(1),
+    backgroundColor:mom.slice(1).map(v=>v>=0?'rgba(16,196,126,.6)':'rgba(240,80,110,.6)'),
+    borderColor:mom.slice(1).map(v=>v>=0?'#10c47e':'#f0506e'),borderWidth:1,borderRadius:4}]},
+    {plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#4a6888',font:{size:9}},grid:{color:'rgba(30,53,84,.4)'}},y:{ticks:{color:'#4a6888',font:{size:9},callback:v=>v+'%'},grid:{color:'rgba(30,53,84,.4)'}}}});
+
+  // Month-specific detail section
+  const det=document.getElementById('monthDetail');
+  if(mIdx!=='all'&&mIdx!==''){
+    const mi=parseInt(mIdx);
+    const mKey='total_month_'+(mi+1);
+    const qKey='qty_month_'+(mi+1);
+    const mVal=filtRows.reduce((s,r)=>s+n(r[mKey]),0);
+    const mQty=filtRows.reduce((s,r)=>s+n(r[qKey]),0);
+    const prevVal=mi>0?filtRows.reduce((s,r)=>s+n(r['total_month_'+mi]),0):0;
+    const momPct=prevVal?+pct(mVal,prevVal):null;
+
+    // group by for this month
+    const byItem=Object.entries(filtRows.reduce((g,r)=>{const k=r.item_name||'ไม่ระบุ';g[k]=(g[k]||0)+n(r[mKey]);return g;},{})).sort((a,b)=>b[1]-a[1]);
+    const byHosp=Object.entries(filtRows.reduce((g,r)=>{const k=r.hospitalname||'ไม่ระบุ';g[k]=(g[k]||0)+n(r[mKey]);return g;},{})).sort((a,b)=>b[1]-a[1]);
+    const byVend=Object.entries(filtRows.reduce((g,r)=>{const k=r.stock_vendor_name||'ไม่ระบุ';g[k]=(g[k]||0)+n(r[mKey]);return g;},{})).sort((a,b)=>b[1]-a[1]);
+
+    const rankHtml=(entries,limit=8)=>{const top=entries.slice(0,limit);const mx=top[0]?.[1]||1;return top.map(([nm,v],i)=>`
+      <div class="rank-item">
+        <div class="rank-no ${i<3?'top'+(i+1):''}">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
+        <div class="rank-name" title="${nm}">${nm||'—'}</div>
+        <div class="rank-bar-wrap"><div class="rank-bar" style="width:${(v/mx*100).toFixed(1)}%;background:${PAL[i%PAL.length]}"></div></div>
+        <div class="rank-val" style="color:${PAL[i%PAL.length]}">฿${fmtB(v)}</div>
+      </div>`).join('');};
+
+    det.innerHTML=`
+      <div class="section-hdr"><div class="section-label">📅 ${MONTHS[mi]} — รายละเอียด</div><div class="section-line"></div></div>
+      <div class="kpi-grid4" style="margin-bottom:14px;">
+        <div class="kcard" style="--kc:var(--gold)"><div class="kcard-icon">💰</div><div class="kcard-label">มูลค่า ${MONTHS[mi]}</div><div class="kcard-val sm">฿${fmtB(mVal)}</div>${momPct!==null?`<div class="kcard-delta ${momPct>=0?'delta-up':'delta-dn'}">${momPct>=0?'▲':'▼'} ${Math.abs(momPct)}% จากเดือนก่อน</div>`:'<div class="kcard-sub">เดือนแรก</div>'}</div>
+        <div class="kcard" style="--kc:var(--sky)"><div class="kcard-icon">📦</div><div class="kcard-label">จำนวน ${MONTHS[mi]}</div><div class="kcard-val sm">${fmtN(mQty)}</div><div class="kcard-sub">ชิ้น/หน่วย</div></div>
+        <div class="kcard" style="--kc:var(--emerald)"><div class="kcard-icon">🧪</div><div class="kcard-label">รายการวัสดุ</div><div class="kcard-val sm">${byItem.filter(([,v])=>v>0).length}</div><div class="kcard-sub">ชนิด</div></div>
+        <div class="kcard" style="--kc:var(--lavender)"><div class="kcard-icon">🏥</div><div class="kcard-label">โรงพยาบาล</div><div class="kcard-val sm">${byHosp.filter(([,v])=>v>0).length}</div><div class="kcard-sub">แห่ง</div></div>
+      </div>
+      <div class="grid-3">
+        <div class="panel"><div class="ph"><div class="pt">🏆 วัสดุมูลค่าสูงสุด</div><span class="ptag">TOP 8 · ${MONTHS[mi]}</span></div><div class="rank-list">${rankHtml(byItem)}</div></div>
+        <div class="panel"><div class="ph"><div class="pt">🏥 โรงพยาบาลมูลค่าสูงสุด</div><span class="ptag">TOP 8 · ${MONTHS[mi]}</span></div><div class="rank-list">${rankHtml(byHosp)}</div></div>
+        <div class="panel"><div class="ph"><div class="pt">🏪 ผู้จำหน่ายมูลค่าสูงสุด</div><span class="ptag">TOP 8 · ${MONTHS[mi]}</span></div><div class="rank-list">${rankHtml(byVend)}</div></div>
+      </div>`;
+  } else {
+    det.innerHTML='';
+  }
 
   // Heatmap
   renderHeatmap();
@@ -1320,29 +1371,14 @@ function exportCSV(){
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download='hospital_procurement.csv';a.click();
 }
 
-/* ══════════════════ STATUS + TICK ══════════════════ */
+/* ══════════════════ STATUS ══════════════════ */
 function setSb(txt,state){
   document.getElementById('sbStatus').textContent=txt;
   document.getElementById('liveDot').style.background=state==='live'?'var(--emerald)':state==='err'?'var(--rose)':'var(--gold)';
 }
-function startTick(){
-  clearInterval(tickT);tickS=Date.now();
-  tickT=setInterval(()=>{
-    const p=Math.min((Date.now()-tickS)/ms*100,100);
-    document.getElementById('tickF').style.width=p+'%';
-    if(p>=100)tickS=Date.now();
-  },100);
-}
-function setMs(v,btn){
-  ms=v;document.querySelectorAll('.rb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
-  clearInterval(pollT);pollT=setInterval(fetchNow,ms);startTick();
-  document.getElementById('ftInterval').textContent=v>=60000?v/60000+'m':v/1000+'s';
-}
 
 /* ══════════════════ INIT ══════════════════ */
 fetchNow();
-pollT=setInterval(fetchNow,ms);
-startTick();
 </script>
 </body>
 </html>
