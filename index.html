@@ -662,8 +662,8 @@ table.dtbl td{padding:7px 11px;vertical-align:middle;}
       <div class="grid-3">
         <div class="panel" style="animation-delay:.12s">
           <div class="ph">
-            <div class="pt">📦 จำนวน<span>รายเดือน (ชิ้น)</span></div>
-            <span class="ptag blue">QTY</span>
+            <div class="pt">🗂️ สัดส่วนมูลค่า<span>ตามประเภทวัสดุ</span></div>
+            <span class="ptag">TOP 6</span>
           </div>
           <div class="ch ch-200"><canvas id="cQtyBar"></canvas></div>
         </div>
@@ -773,8 +773,10 @@ table.dtbl td{padding:7px 11px;vertical-align:middle;}
           <div class="ch ch-320"><canvas id="cAnnualHosp"></canvas></div>
         </div>
         <div class="panel">
-          <div class="ph"><div class="pt">🎯 ABC Analysis <span>มูลค่าสะสม</span></div></div>
-          <div class="ch ch-320"><canvas id="cPareto"></canvas></div>
+          <div class="ph"><div class="pt">🎯 ABC Analysis <span>มูลค่าสะสม</span></div><span class="ptag">PARETO 80/15/5</span></div>
+          <div id="abcZones" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;"></div>
+          <div class="ch ch-240"><canvas id="cPareto"></canvas></div>
+          <div id="abcList" style="margin-top:12px;max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
         </div>
       </div>
 
@@ -849,6 +851,12 @@ table.dtbl td{padding:7px 11px;vertical-align:middle;}
         <div class="ph"><div class="pt">📋 ข้อมูลดิบทั้งหมด</div><span class="ptag" id="dtblCount">—</span></div>
         <div class="srch-bar">
           <input class="dsrch" id="dsrch" placeholder="🔍 ค้นหา ชื่อวัสดุ / โรงพยาบาล / ผู้จำหน่าย / ประเภท..." oninput="doSearch()">
+          <select class="fsel" id="rowLimit" onchange="renderData()" style="max-width:120px">
+            <option value="50">แสดง 50</option>
+            <option value="100">แสดง 100</option>
+            <option value="200">แสดง 200</option>
+            <option value="all">ทั้งหมด</option>
+          </select>
           <button class="xbtn" onclick="exportCSV()">⬇ Export CSV</button>
           <button class="xbtn" onclick="fetchNow()">↻ รีเฟรช</button>
         </div>
@@ -1047,12 +1055,14 @@ function renderOverview(){
   const hosps=new Set(R.map(r=>r.hospitalname)).size;
   const vendors=new Set(R.map(r=>r.stock_vendor_name)).size;
   const items=new Set(R.map(r=>r.item_name)).size;
+  const avgPerHosp=hosps>0?totVal/hosps:0;
+  const avgUnitPrice=totQty>0?totVal/totQty:0;
   document.getElementById('kpiMain').innerHTML=`
     <div class="kcard" style="--kc:var(--gold);animation-delay:0s"><div class="kcard-icon">💰</div><div class="kcard-label">มูลค่า PO รวม</div><div class="kcard-val">฿${fmtB(totVal)}</div><div class="kcard-sub">จากทุกโรงพยาบาล</div></div>
-    <div class="kcard" style="--kc:var(--sapphire);animation-delay:.05s"><div class="kcard-icon">📦</div><div class="kcard-label">จำนวน PO รวม</div><div class="kcard-val sm">${fmtN(totQty)}</div><div class="kcard-sub">ชิ้น/หน่วย</div></div>
+    <div class="kcard" style="--kc:var(--teal);animation-delay:.05s"><div class="kcard-icon">🏦</div><div class="kcard-label">เฉลี่ย/โรงพยาบาล</div><div class="kcard-val sm">฿${fmtB(avgPerHosp)}</div><div class="kcard-sub">มูลค่าต่อแห่ง</div></div>
     <div class="kcard" style="--kc:var(--emerald);animation-delay:.1s"><div class="kcard-icon">🏥</div><div class="kcard-label">โรงพยาบาล</div><div class="kcard-val">${hosps}</div><div class="kcard-sub">แห่งทั่วประเทศ</div></div>
     <div class="kcard" style="--kc:var(--lavender);animation-delay:.15s"><div class="kcard-icon">🏪</div><div class="kcard-label">ผู้จำหน่าย</div><div class="kcard-val">${vendors}</div><div class="kcard-sub">รายในระบบ</div></div>
-    <div class="kcard" style="--kc:var(--amber);animation-delay:.2s"><div class="kcard-icon">🧪</div><div class="kcard-label">รายการวัสดุ</div><div class="kcard-val">${items}</div><div class="kcard-sub">ชนิด</div></div>`;
+    <div class="kcard" style="--kc:var(--amber);animation-delay:.2s"><div class="kcard-icon">💹</div><div class="kcard-label">ราคาเฉลี่ย/หน่วย</div><div class="kcard-val sm">฿${fmtB(avgUnitPrice)}</div><div class="kcard-sub">${fmtN(totQty)} หน่วยรวม</div></div>`;
 
   // KPI Quarterly
   const qVals=getQtrTotals('total');
@@ -1085,8 +1095,10 @@ function renderOverview(){
   const typeG=groupBy('item_type_name',r=>n(r.po_total_total)).slice(0,8);
   mkChart('cTypePie','doughnut',{labels:typeG.map(([k])=>k),datasets:[{data:typeG.map(([,v])=>v),backgroundColor:PAL,borderWidth:0,hoverOffset:8}]},{cutout:'60%',plugins:{legend:{position:'bottom',labels:{color:'#4a6888',font:{size:9},boxWidth:8,padding:6}}}});
 
-  // Qty bar
-  mkChart('cQtyBar','bar',{labels:MONTHS,datasets:[{label:'จำนวน',data:mQtys,backgroundColor:MONTHS.map((_,i)=>`rgba(56,189,248,${.35+i*.05})`),borderColor:'#38bdf8',borderWidth:1,borderRadius:4}]},{plugins:{legend:{display:false}},...{scales:scaleOpts()}});
+  // Category value distribution (exec view)
+  const catG=groupBy('item_type_name',r=>n(r.po_total_total)).slice(0,6);
+  const catTot=catG.reduce((s,[,v])=>s+v,0)||1;
+  mkChart('cQtyBar','bar',{labels:catG.map(([k])=>k.length>16?k.slice(0,14)+'…':k),datasets:[{label:'มูลค่า PO',data:catG.map(([,v])=>v),backgroundColor:PAL.slice(0,6).map(c=>c+'bb'),borderColor:PAL.slice(0,6),borderWidth:1.5,borderRadius:5}]},{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`฿${fmtB(ctx.raw)} (${(ctx.raw/catTot*100).toFixed(1)}%)`}}},scales:{x:{ticks:{color:'#4a6888',font:{size:9},callback:v=>fmtB(v)},grid:{color:'rgba(30,53,84,.4)'}},y:{ticks:{color:'#4a6888',font:{size:9}},grid:{display:false}}}});
 
   // Vendor bar
   const vendG=groupBy('stock_vendor_name',r=>n(r.po_total_total)).slice(0,8);
@@ -1248,20 +1260,58 @@ function renderAnnual(){
   const hospG=groupBy('hospitalname',r=>n(r.po_total_total)).slice(0,12);
   mkChart('cAnnualHosp','bar',{labels:hospG.map(([k])=>k.slice(0,20)),datasets:[{label:'มูลค่า PO',data:hospG.map(([,v])=>v),backgroundColor:PAL.map(c=>c+'88'),borderColor:PAL,borderWidth:1,borderRadius:5}]},{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#4a6888',font:{size:9},callback:v=>fmtB(v)},grid:{color:'rgba(30,53,84,.4)'}},y:{ticks:{color:'#4a6888',font:{size:9}},grid:{display:false}}}});
 
-  // Pareto
+  // ABC Analysis — redesigned
   const sorted=groupBy('item_name',r=>n(r.po_total_total));
-  const tot=sorted.reduce((s,[,v])=>s+v,0);
-  let cum=0;const paretoD=sorted.slice(0,30).map(([k,v])=>{cum+=v;return{name:k,val:v,cumPct:tot>0?cum/tot*100:0};});
-  mkChart('cPareto','bar',{labels:paretoD.map(d=>d.name.slice(0,12)),datasets:[
-    {type:'bar',label:'มูลค่า',data:paretoD.map(d=>d.val),backgroundColor:'rgba(200,168,75,.5)',borderColor:'#c8a84b',borderWidth:1,borderRadius:3,yAxisID:'y'},
-    {type:'line',label:'% สะสม',data:paretoD.map(d=>d.cumPct),borderColor:'#f0506e',backgroundColor:'transparent',borderWidth:2,pointRadius:2,tension:.1,yAxisID:'y1'}
-  ]},{scales:{x:{ticks:{color:'#4a6888',font:{size:8},maxRotation:45},grid:{color:'rgba(30,53,84,.3)'}},y:{ticks:{color:'#4a6888',font:{size:9},callback:v=>fmtB(v)},grid:{color:'rgba(30,53,84,.3)'},position:'left'},y1:{ticks:{color:'#4a6888',font:{size:9},callback:v=>v+'%'},grid:{display:false},position:'right',max:100}},plugins:{legend:{labels:{color:'#4a6888',font:{size:9},boxWidth:8}}}});
+  const tot=sorted.reduce((s,[,v])=>s+v,0)||1;
+  let cum=0;
+  const paretoD=sorted.slice(0,20).map(([k,v])=>{cum+=v;const cp=cum/tot*100;const zone=cp<=80?'A':cp<=95?'B':'C';return{name:k,val:v,cumPct:cp,zone};});
+  // Zone counts
+  const zoneA=sorted.filter(([,v])=>{let c2=0;return(c2+=v,c2/tot*100)<=80}).length;
+  let c80=0,c95=0;
+  const zoneAItems=[];const zoneBItems=[];const zoneCItems=[];
+  let runC=0;
+  sorted.forEach(([k,v])=>{runC+=v;const p=runC/tot*100;if(p<=80)zoneAItems.push([k,v]);else if(p<=95)zoneBItems.push([k,v]);else zoneCItems.push([k,v]);});
+  const zoneColor={A:'var(--gold)',B:'var(--sky)',C:'var(--teal)'};
+  document.getElementById('abcZones').innerHTML=`
+    <div style="background:rgba(200,168,75,.1);border:1px solid rgba(200,168,75,.3);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:1.5px;color:var(--gold);margin-bottom:4px">ZONE A</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:1.2rem;font-weight:700;color:var(--gold2)">${zoneAItems.length} รายการ</div>
+      <div style="font-size:.68rem;color:var(--txt3);margin-top:2px">≈ 80% ของมูลค่า</div>
+    </div>
+    <div style="background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.25);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:1.5px;color:var(--sky);margin-bottom:4px">ZONE B</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:1.2rem;font-weight:700;color:var(--sky)">${zoneBItems.length} รายการ</div>
+      <div style="font-size:.68rem;color:var(--txt3);margin-top:2px">≈ 15% ของมูลค่า</div>
+    </div>
+    <div style="background:rgba(14,168,160,.08);border:1px solid rgba(14,168,160,.25);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:1.5px;color:var(--teal);margin-bottom:4px">ZONE C</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:1.2rem;font-weight:700;color:var(--teal)">${zoneCItems.length} รายการ</div>
+      <div style="font-size:.68rem;color:var(--txt3);margin-top:2px">≈ 5% ของมูลค่า</div>
+    </div>`;
+
+  // Pareto chart — zone-colored bars
+  const barColors=paretoD.map(d=>d.zone==='A'?'rgba(200,168,75,.7)':d.zone==='B'?'rgba(56,189,248,.7)':'rgba(14,168,160,.7)');
+  const borderColors=paretoD.map(d=>d.zone==='A'?'#c8a84b':d.zone==='B'?'#38bdf8':'#0ea8a0');
+  mkChart('cPareto','bar',{labels:paretoD.map(d=>d.name.length>14?d.name.slice(0,13)+'…':d.name),datasets:[
+    {type:'bar',label:'มูลค่า',data:paretoD.map(d=>d.val),backgroundColor:barColors,borderColor:borderColors,borderWidth:1.5,borderRadius:4,yAxisID:'y'},
+    {type:'line',label:'% สะสม',data:paretoD.map(d=>d.cumPct),borderColor:'#f0506e',backgroundColor:'transparent',borderWidth:2,pointRadius:3,pointBackgroundColor:paretoD.map(d=>d.zone==='A'?'#c8a84b':d.zone==='B'?'#38bdf8':'#0ea8a0'),tension:.1,yAxisID:'y1'}
+  ]},{scales:{x:{ticks:{color:'#4a6888',font:{size:8},maxRotation:35},grid:{color:'rgba(30,53,84,.3)'}},y:{ticks:{color:'#4a6888',font:{size:9},callback:v=>fmtB(v)},grid:{color:'rgba(30,53,84,.3)'},position:'left'},y1:{ticks:{color:'#4a6888',font:{size:9},callback:v=>v.toFixed(0)+'%'},grid:{display:false},position:'right',min:0,max:100}},plugins:{legend:{labels:{color:'#4a6888',font:{size:9},boxWidth:8}},tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===0?`฿${fmtB(ctx.raw)} (${paretoD[ctx.dataIndex].zone})`:ctx.raw.toFixed(1)+'%'}}}});
+
+  // ABC item list (Zone A top items)
+  document.getElementById('abcList').innerHTML=`
+    <div style="font-size:.6rem;font-weight:700;letter-spacing:1.5px;color:var(--txt3);padding:2px 4px;margin-bottom:2px">ZONE A — รายการควบคุมเข้ม (มูลค่าสูง)</div>`+
+    zoneAItems.slice(0,10).map(([k,v],i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:rgba(200,168,75,.06);border:1px solid rgba(200,168,75,.12);border-radius:6px">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--gold);width:18px;text-align:center;flex-shrink:0">${i+1}</span>
+      <span style="font-size:.75rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${k}</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--gold2);flex-shrink:0">฿${fmtB(v)}</span>
+      <span style="font-size:.65rem;color:var(--gold);background:rgba(200,168,75,.15);padding:1px 6px;border-radius:8px;flex-shrink:0">${(v/tot*100).toFixed(1)}%</span>
+    </div>`).join('');
 
   // Insights
   const catCount=[...new Set(filtRows.map(r=>r.item_type_name))].length;
-  const top3Share=sorted.slice(0,3).reduce((s,[,v])=>s+v,0)/tot*100;
   document.getElementById('annualInsights').innerHTML=`
-    <div class="insight-card"><div class="ic-icon">🎯</div><div class="ic-title">ABC: Top 3 วัสดุ</div><div class="ic-val">${top3Share.toFixed(1)}%</div><div class="ic-sub">ของมูลค่าทั้งหมด — ความเข้มข้นสูง</div></div>
+    <div class="insight-card"><div class="ic-icon">🎯</div><div class="ic-title">Zone A ควบคุมเข้ม</div><div class="ic-val">${zoneAItems.length} รายการ</div><div class="ic-sub">${(zoneAItems.reduce((s,[,v])=>s+v,0)/tot*100).toFixed(1)}% ของมูลค่าทั้งหมด</div></div>
     <div class="insight-card"><div class="ic-icon">🗂️</div><div class="ic-title">ประเภทวัสดุ</div><div class="ic-val">${catCount} ประเภท</div><div class="ic-sub">ในระบบทั้งหมด</div></div>
     <div class="insight-card"><div class="ic-icon">💹</div><div class="ic-title">ราคาเฉลี่ย/ชิ้น</div><div class="ic-val">฿${filtRows.some(r=>n(r.po_qty_total)>0)?fmtB(filtRows.filter(r=>n(r.po_qty_total)>0).reduce((s,r)=>s+n(r.po_total_total)/n(r.po_qty_total),0)/filtRows.filter(r=>n(r.po_qty_total)>0).length):'—'}</div><div class="ic-sub">เฉลี่ยทุกรายการ</div></div>`;
 
@@ -1355,11 +1405,14 @@ const DLBL={hospitalname:'โรงพยาบาล',warehouse_name:'คลั
 
 function renderData(){
   const q=(document.getElementById('dsrch')?.value||'').toLowerCase();
+  const limitVal=document.getElementById('rowLimit')?.value||'50';
   let disp=q?filtRows.filter(r=>['item_name','hospitalname','stock_vendor_name','item_type_name','warehouse_name'].some(k=>String(r[k]||'').toLowerCase().includes(q))):[...filtRows];
   if(sortC){disp.sort((a,b)=>{const av=n(a[sortC]),bv=n(b[sortC]);if(av||bv)return sortA?av-bv:bv-av;return sortA?String(a[sortC]).localeCompare(String(b[sortC]),'th'):String(b[sortC]).localeCompare(String(a[sortC]),'th');});}
+  const total=disp.length;
+  const shown=limitVal==='all'?disp:disp.slice(0,parseInt(limitVal));
   document.getElementById('dHead').innerHTML=`<tr>${DCOLS.map(c=>`<th onclick="doSort('${c}')" class="${sortC===c?'srt':''}">${DLBL[c]}${sortC===c?(sortA?' ↑':' ↓'):''}</th>`).join('')}</tr>`;
-  document.getElementById('dBody').innerHTML=disp.map(row=>`<tr>${DCOLS.map(c=>{const v=row[c]??'';if(c==='po_total_total')return`<td class="tn tot-col">${n(v)>0?'฿'+fmtB(n(v)):'—'}</td>`;if(c==='po_qty_total')return`<td class="tn" style="color:var(--sky)">${n(v)>0?fmtN(n(v)):'—'}</td>`;return`<td>${v||'—'}</td>`;}).join('')}</tr>`).join('')||`<tr><td colspan="${DCOLS.length}" style="text-align:center;padding:40px;color:var(--txt3)">ไม่พบข้อมูล</td></tr>`;
-  document.getElementById('dtblCount').textContent=`${disp.length.toLocaleString()} รายการ`;
+  document.getElementById('dBody').innerHTML=shown.map(row=>`<tr>${DCOLS.map(c=>{const v=row[c]??'';if(c==='po_total_total')return`<td class="tn tot-col">${n(v)>0?'฿'+fmtB(n(v)):'—'}</td>`;if(c==='po_qty_total')return`<td class="tn" style="color:var(--sky)">${n(v)>0?fmtN(n(v)):'—'}</td>`;return`<td>${v||'—'}</td>`;}).join('')}</tr>`).join('')||`<tr><td colspan="${DCOLS.length}" style="text-align:center;padding:40px;color:var(--txt3)">ไม่พบข้อมูล</td></tr>`;
+  document.getElementById('dtblCount').textContent=`แสดง ${shown.length.toLocaleString()} / ${total.toLocaleString()} รายการ`;
 }
 
 function doSearch(){renderData();}
