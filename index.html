@@ -278,7 +278,7 @@ body::after {
 }
 .section-line {flex:1;height:1px;background:linear-gradient(90deg,var(--rim),transparent);}
 .section-label {
-  font-size:.65rem;font-weight:700;letter-spacing:2px;
+  font-size:.9rem;font-weight:700;letter-spacing:2px;
   text-transform:uppercase;color:var(--gold);white-space:nowrap;
 }
 
@@ -1010,6 +1010,12 @@ html[data-theme="light"] .btn-theme{color:var(--txt2);}
         </div>
         <div class="panel">
           <div class="ph"><div class="pt">🎯 ABC Analysis <span>มูลค่าสะสม</span></div><span class="ptag">PARETO 80/15/5</span></div>
+          <div style="font-size:.72rem;color:var(--txt3);line-height:1.6;margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,.03);border-left:3px solid var(--gold);border-radius:4px">
+            <strong style="color:var(--gold)">ABC Analysis</strong> คือการจำแนกวัสดุตามมูลค่าสะสม โดยใช้หลัก Pareto 80/15/5 —
+            <span style="color:var(--gold)">Zone A</span> คือวัสดุที่มีมูลค่าสูง คิดเป็น ~80% ของมูลค่าทั้งหมด (จำนวนน้อย ต้องควบคุมเข้มงวด) ·
+            <span style="color:var(--sky)">Zone B</span> มูลค่าปานกลาง ~15% ·
+            <span style="color:var(--teal)">Zone C</span> มูลค่าต่ำ ~5% (จำนวนมาก ควบคุมทั่วไป)
+          </div>
           <div id="abcZones" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;"></div>
           <div class="ch ch-240"><canvas id="cPareto"></canvas></div>
           <div id="abcList" style="margin-top:12px;max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
@@ -1542,7 +1548,7 @@ function renderOverview(){
   const scData=R.filter(r=>n(r.po_qty_total)>0&&n(r.po_total_total)>0).slice(0,200).map(r=>({x:n(r.po_qty_total),y:n(r.po_total_total)/n(r.po_qty_total)}));
   mkChart('cScatter','scatter',{datasets:[{label:'ราคา/หน่วย',data:scData,backgroundColor:'rgba(139,124,248,.5)',pointRadius:3}]},{scales:{x:{ticks:{color:cTick(),font:{size:9},callback:v=>fmtN(v)},grid:{color:cGrid()},title:{display:true,text:'จำนวน (ชิ้น)',color:cTick(),font:{size:9}}},y:{ticks:{color:cTick(),font:{size:9},callback:v=>fmtB(v)},grid:{color:cGrid()},title:{display:true,text:'ราคา/หน่วย (บาท)',color:cTick(),font:{size:9}}}},plugins:{legend:{display:false}}});
 
-  renderRankList('topItemsList',groupBy('item_name',r=>n(r.po_total_total)));
+  renderRankList('topItemsList',(()=>{const g={};filtRows.forEach(r=>{const k=`${r.item_type_name||'ไม่ระบุ'} : ${r.item_name||'ไม่ระบุ'}`;g[k]=(g[k]||0)+n(r.po_total_total);});return Object.entries(g).sort((a,b)=>b[1]-a[1]);})());
   renderRankList('topHospList',groupBy('hospitalname',r=>n(r.po_total_total)));
 }
 
@@ -1603,7 +1609,7 @@ function renderMonthly(){
     const momPct=prevVal?+pct(mVal,prevVal):null;
 
     // group by for this month
-    const byItem=Object.entries(filtRows.reduce((g,r)=>{const k=r.item_name||'ไม่ระบุ';g[k]=(g[k]||0)+n(r[mKey]);return g;},{})).sort((a,b)=>b[1]-a[1]);
+    const byItem=Object.entries(filtRows.reduce((g,r)=>{const k=`${r.item_type_name||'ไม่ระบุ'} : ${r.item_name||'ไม่ระบุ'}`;g[k]=(g[k]||0)+n(r[mKey]);return g;},{})).sort((a,b)=>b[1]-a[1]);
     const byHosp=Object.entries(filtRows.reduce((g,r)=>{const k=r.hospitalname||'ไม่ระบุ';g[k]=(g[k]||0)+n(r[mKey]);return g;},{})).sort((a,b)=>b[1]-a[1]);
     const byVend=Object.entries(filtRows.reduce((g,r)=>{const k=r.stock_vendor_name||'ไม่ระบุ';g[k]=(g[k]||0)+n(r[mKey]);return g;},{})).sort((a,b)=>b[1]-a[1]);
 
@@ -1677,7 +1683,7 @@ function renderQuarterly(){
   document.getElementById('qVendBody').innerHTML=vendors.map(v=>{
     const qvals=QTR_M.map(mi=>mi.reduce((s,m)=>s+filtRows.filter(r=>r.stock_vendor_name===v).reduce((ss,r)=>ss+n(r['total_month_'+(m+1)]),0),0));
     const tot=qvals.reduce((a,b)=>a+b,0);
-    return`<tr><td title="${v}">${v.length>25?v.slice(0,23)+'…':v}</td>${qvals.map(val=>`<td class="${val>0?'h4':'h0'}">${val>0?'฿'+fmtB(val):'—'}</td>`).join('')}<td class="tot-col">฿${fmtB(tot)}</td></tr>`;
+    return`<tr><td title="${v}">${v}</td>${qvals.map(val=>`<td class="${val>0?'h4':'h0'}">${val>0?'฿'+fmtB(val):'—'}</td>`).join('')}<td class="tot-col">฿${fmtB(tot)}</td></tr>`;
   }).join('');
 }
 
@@ -1808,7 +1814,7 @@ function renderDeepDive(){
   document.getElementById('deepHeatBody').innerHTML=hosps.map(h=>{
     const qvals=QTR_M.map(mi=>mi.reduce((s,m)=>s+filtRows.filter(r=>r.hospitalname===h).reduce((ss,r)=>ss+n(r['total_month_'+(m+1)]),0),0));
     const tot=qvals.reduce((a,b)=>a+b,0);
-    return`<tr><td title="${h}">${h.length>22?h.slice(0,20)+'…':h}</td>${qvals.map(v=>`<td class="${hcVal(v,maxHQ)}">${v>0?'฿'+fmtB(v):'—'}</td>`).join('')}<td class="tot-col">฿${fmtB(tot)}</td></tr>`;
+    return`<tr><td title="${h}">${h}</td>${qvals.map(v=>`<td class="${hcVal(v,maxHQ)}">${v>0?'฿'+fmtB(v):'—'}</td>`).join('')}<td class="tot-col">฿${fmtB(tot)}</td></tr>`;
   }).join('');
 }
 
@@ -1996,8 +2002,8 @@ function renderTransparency(){
     const rc=d.topShare>60?'var(--rose)':d.topShare>40?'var(--amber)':'var(--emerald)';
     const ic=d.topShare>60?'🔴':d.topShare>40?'🟡':'🟢';
     return`<div class="var-row">
-      <div class="var-name" title="${d.h}">${d.h.length>20?d.h.slice(0,18)+'…':d.h}</div>
-      <div style="font-size:.67rem;color:var(--txt3);min-width:80px;text-align:right;padding-right:6px">${d.topV.length>16?d.topV.slice(0,14)+'…':d.topV}</div>
+      <div class="var-name" title="${d.h}">${d.h}</div>
+      <div style="font-size:.67rem;color:var(--txt3);min-width:80px;text-align:right;padding-right:6px">${d.topV}</div>
       <div class="var-pct" style="background:rgba(0,0,0,.2);color:${rc}">${ic} ${d.topShare.toFixed(0)}%</div>
       <div class="var-bar-wrap"><div class="var-bar" style="width:${Math.min(d.topShare,100).toFixed(1)}%;background:${rc}"></div></div>
     </div>`;
@@ -2007,7 +2013,7 @@ function renderTransparency(){
   const vTot=vendG.reduce((s,[,v])=>s+v,0)||1;
   document.getElementById('vendorConcT').innerHTML=vendG.slice(0,8).map(([k,v])=>{
     const sh=v/vTot*100;const rc=sh>30?'var(--rose)':sh>15?'var(--amber)':'var(--emerald)';
-    return`<div class="var-row"><div class="var-name">${k.length>24?k.slice(0,22)+'…':k}</div><div class="var-val">฿${fmtB(v)}</div><div class="var-pct" style="background:rgba(0,0,0,.2);color:${rc}">${sh.toFixed(1)}%</div><div class="var-bar-wrap"><div class="var-bar" style="width:${Math.min(sh,100).toFixed(1)}%;background:${rc}"></div></div></div>`;
+    return`<div class="var-row"><div class="var-name">${k}</div><div class="var-val">฿${fmtB(v)}</div><div class="var-pct" style="background:rgba(0,0,0,.2);color:${rc}">${sh.toFixed(1)}%</div><div class="var-bar-wrap"><div class="var-bar" style="width:${Math.min(sh,100).toFixed(1)}%;background:${rc}"></div></div></div>`;
   }).join('');
 
   // ── Single Source Table ──
